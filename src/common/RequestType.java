@@ -1,0 +1,16 @@
+package common;
+
+public enum RequestType {
+    ADD_GAME,
+    REMOVE_GAME,
+    UPDATE_GAME_RISK,
+    UPDATE_GAME_BET_LIMITS,
+    GET_PROVIDER_STATS,
+    GET_PLAYER_STATS,
+    MAP_PROVIDER_STATS,
+    MAP_PLAYER_STATS,
+    GET_ALL_GAMES,
+    SEARCH_GAMES,
+    PLACE_BET,
+    ADD_BALANCE
+}

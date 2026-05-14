@@ -1,0 +1,11 @@
+{
+  "GameName": "DiceRush",
+  "ProviderName": "provider1",
+  "Stars": 4,
+  "NoOfVotes": 42,
+  "GameLogo": "assets/logos/diceRush.png",
+  "MinBet": 1,
+  "MaxBet": 25,
+  "RiskLevel": "medium",
+  "HashKey": "provider1-dicerush-key"
+}
