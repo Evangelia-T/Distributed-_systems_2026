@@ -110,10 +110,10 @@ public class HandleThreadWorker extends Thread {
             case GET_PLAYER_STATS:
                 return handleGetPlayerStats(request.getPlayerId());
             case MAP_PROVIDER_STATS:
-                return handleMapProviderStats(request.getProviderName());
+                return handleMapProviderStats(request);
 
             case MAP_PLAYER_STATS:
-                return handleMapPlayerStats(request.getPlayerId());
+                return handleMapPlayerStats(request);
             default:
                 return new Response(false, "Unsupported request type: " + type);
         }
@@ -504,30 +504,94 @@ public class HandleThreadWorker extends Thread {
         );
     }
 
-    private Response handleMapProviderStats(String providerName) {
+    private Response handleMapProviderStats(Request request) {
+        String providerName = request.getProviderName();
         if (providerName == null || providerName.trim().isEmpty()) {
             return new Response(false, "Provider name is empty");
         }
 
-        return new Response(
-                true,
-                "Provider map output ready",
+        if (request.getRequestId() == null || request.getRequestId().isBlank()) {
+            return new Response(true, "Provider map output ready", storage.getProviderPartialTotals(providerName));
+        }
+
+        Request mapPayload = Request.providerMapPayload(
+                providerName,
+                request.getRequestId(),
                 storage.getProviderPartialTotals(providerName)
         );
+        return sendMapResultToReducer(request, mapPayload);
 
 
     }
 
-    private Response handleMapPlayerStats(String playerId) {
+    private Response handleMapPlayerStats(Request request) {
+        String playerId = request.getPlayerId();
         if (playerId == null || playerId.trim().isEmpty()) {
             return new Response(false, "Player ID is empty");
         }
 
-        return new Response(
-                true,
-                "Player map output ready",
+        if (request.getRequestId() == null || request.getRequestId().isBlank()) {
+            return new Response(true, "Player map output ready", storage.getPlayerPartialTotals(playerId));
+        }
+
+        Request mapPayload = Request.playerMapPayload(
+                playerId,
+                request.getRequestId(),
                 storage.getPlayerPartialTotals(playerId)
         );
+        return sendMapResultToReducer(request, mapPayload);
+    }
+
+    private Response sendMapResultToReducer(Request mapJob, Request mapPayload) {
+        String reducerHost = mapJob.getReducerHost() == null || mapJob.getReducerHost().isBlank()
+                ? "localhost"
+                : mapJob.getReducerHost();
+        int reducerPort = mapJob.getReducerPort() == null ? 7000 : mapJob.getReducerPort();
+
+        Socket socket = null;
+        ObjectOutputStream out = null;
+        ObjectInputStream in = null;
+
+        try {
+            socket = new Socket(reducerHost, reducerPort);
+
+            out = new ObjectOutputStream(socket.getOutputStream());
+            out.flush();
+
+            in = new ObjectInputStream(socket.getInputStream());
+
+            out.writeObject(mapPayload);
+            out.flush();
+
+            Response response = (Response) in.readObject();
+            if (!response.isSuccess()) {
+                return response;
+            }
+
+            return new Response(true, "Map output submitted to reducer");
+        } catch (Exception e) {
+            return new Response(false, "Failed to submit map output to reducer: " + e.getMessage());
+        } finally {
+            try {
+                if (in != null) in.close();
+            } catch (IOException e) {
+                e.printStackTrace();
+            }
+
+            try {
+                if (out != null) out.close();
+            } catch (IOException e) {
+                e.printStackTrace();
+            }
+
+            try {
+                if (socket != null && !socket.isClosed()) {
+                    socket.close();
+                }
+            } catch (IOException e) {
+                e.printStackTrace();
+            }
+        }
     }
 
     private GameInfo convertToGameInfo(Game game) {

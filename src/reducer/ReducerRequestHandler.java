@@ -1,7 +1,6 @@
 package reducer;
 
 import common.Request;
-import common.RequestType;
 import common.Response;
 
 import java.io.ObjectInputStream;
@@ -38,15 +37,45 @@ public class ReducerRequestHandler implements Runnable {
             return new Response(false, "Invalid reducer request");
         }
 
-        if (request.getType() != RequestType.MAP_PROVIDER_STATS && request.getType() != RequestType.MAP_PLAYER_STATS) {
-            return new Response(false, "Reducer only supports map outputs");
+        return switch (request.getType()) {
+            case START_PROVIDER_REDUCE -> startReduceJob(
+                    request.getRequestId(), request.getExpectedResults(), request.getProviderName());
+            case START_PLAYER_REDUCE -> startReduceJob(
+                    request.getRequestId(), request.getExpectedResults(), request.getPlayerId());
+            case MAP_PROVIDER_STATS, MAP_PLAYER_STATS -> acceptMapOutput(request);
+            case GET_REDUCED_RESULT -> waitForReducedResult(request.getRequestId());
+            default -> new Response(false, "Unsupported reducer request type: " + request.getType());
+        };
+    }
+
+    private Response startReduceJob(String requestId, Integer expectedResults, String subject) {
+        if (expectedResults == null) {
+            return new Response(false, "Missing expected result count");
         }
 
-        Map<String, Double> totals = accumulator.reduce(request.getPartialTotals());
-        String subject = request.getType() == RequestType.MAP_PROVIDER_STATS
-                ? request.getProviderName()
-                : request.getPlayerId();
+        String result = accumulator.startJob(requestId, expectedResults, subject);
+        if ("Reduce job started".equals(result)) {
+            return new Response(true, result);
+        }
+        return new Response(false, result);
+    }
 
-        return new Response(true, "Reduced totals for " + subject, totals);
+    private Response acceptMapOutput(Request request) {
+        String result = accumulator.addPartial(request.getRequestId(), request.getPartialTotals());
+        if ("Map output accepted".equals(result)) {
+            return new Response(true, result);
+        }
+        return new Response(false, result);
+    }
+
+    private Response waitForReducedResult(String requestId) {
+        try {
+            String subject = accumulator.getSubject(requestId);
+            Map<String, Double> totals = accumulator.waitForResult(requestId);
+            return new Response(true, "Reduced totals for " + subject, totals);
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            return new Response(false, "Interrupted while waiting for reduced result");
+        }
     }
 }
