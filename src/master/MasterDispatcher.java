@@ -3,12 +3,9 @@ package master;
 import common.Request;
 import common.Response;
 import common.WorkerInfo;
-import common.map_reduce.Reducer;
 
-import java.util.Collections;
-import java.util.LinkedHashMap;
 import java.util.List;
-import java.util.Map;
+import java.util.UUID;
 
 public class MasterDispatcher {
     private final HashRouter hashRouter;
@@ -38,10 +35,8 @@ public class MasterDispatcher {
             case REMOVE_GAME -> removeGameFromMasterAndWorker(request);
             case UPDATE_GAME_RISK -> updateRiskOnMasterAndWorker(request);
             case UPDATE_GAME_BET_LIMITS -> updateBetLimitsOnMasterAndWorker(request);
-            case GET_PROVIDER_STATS -> reduceFromWorkers(
-                    Request.providerMapPayload(request.getProviderName(), Collections.emptyMap()));
-            case GET_PLAYER_STATS -> reduceFromWorkers(
-                    Request.playerMapPayload(request.getPlayerId(), Collections.emptyMap()));
+            case GET_PROVIDER_STATS -> reduceProviderFromWorkers(request.getProviderName());
+            case GET_PLAYER_STATS -> reducePlayerFromWorkers(request.getPlayerId());
             case GET_ALL_GAMES -> casinoState.getAllAvailableGames();
             case SEARCH_GAMES ->
                     casinoState.search(request.getProviderName(), request.getRiskLevel(), request.getBetCategory(), request.getMinStars());
@@ -56,7 +51,12 @@ public class MasterDispatcher {
         if (!masterResponse.isSuccess()) {
             return masterResponse;
         }
-        return routeByGameName(request.getGameInfo().getGameName(), request);
+
+        Response workerResponse = routeByGameName(request.getGameInfo().getGameName(), request);
+        if (!workerResponse.isSuccess()) {
+            casinoState.removeGame(request.getGameInfo().getGameName());
+        }
+        return workerResponse;
     }
 
     private Response removeGameFromMasterAndWorker(Request request) {
@@ -64,6 +64,7 @@ public class MasterDispatcher {
         if (!masterResponse.isSuccess()) {
             return masterResponse;
         }
+
         return routeByGameName(request.getGameName(), request);
     }
 
@@ -92,22 +93,52 @@ public class MasterDispatcher {
         }
     }
 
-    private Response reduceFromWorkers(Request request) {
-        List<Response> mapResponses = workerClient.broadcast(workerRegistry.getWorkers(), request);
-        Map<String, Double> mergedPartials = new LinkedHashMap<>();
-
-        for (Response mapResponse : mapResponses) {
-            if (!mapResponse.isSuccess()) {
-                return new Response(false, "Worker map phase failed: " + mapResponse.getMessage());
-            }
-            accumulate(mergedPartials, mapResponse.getTotals());
+    private Response reduceProviderFromWorkers(String providerName) {
+        if (providerName == null || providerName.isBlank()) {
+            return new Response(false, "Provider name is empty");
+        }
+        String requestId = UUID.randomUUID().toString();
+        Response startResponse = reducerClient.startReduce(Request.startProviderReduce(providerName, requestId, workerRegistry.size()));
+        if (!startResponse.isSuccess()) {
+            return startResponse;
         }
 
-        Reducer<String, Double, Map<String, Double>> reducer =
-                new reducer.ReducerAccumulator();
-        Map<String, Double> reducedTotals = reducer.reduce(mergedPartials);
-        return new Response(true, "Reduced totals", reducedTotals);
+        Response mapResponse = broadcastMapJobs(Request.providerMapJob(
+                providerName, requestId, reducerClient.getReducerHost(), reducerClient.getReducerPort()));
+        if (!mapResponse.isSuccess()) {
+            return mapResponse;
+        }
 
+        return reducerClient.waitForResult(requestId);
+    }
+
+    private Response reducePlayerFromWorkers(String playerId) {
+        if (playerId == null || playerId.isBlank()) {
+            return new Response(false, "Player ID is empty");
+        }
+        String requestId = UUID.randomUUID().toString();
+        Response startResponse = reducerClient.startReduce(Request.startPlayerReduce(playerId, requestId, workerRegistry.size()));
+        if (!startResponse.isSuccess()) {
+            return startResponse;
+        }
+
+        Response mapResponse = broadcastMapJobs(Request.playerMapJob(
+                playerId, requestId, reducerClient.getReducerHost(), reducerClient.getReducerPort()));
+        if (!mapResponse.isSuccess()) {
+            return mapResponse;
+        }
+
+        return reducerClient.waitForResult(requestId);
+    }
+
+    private Response broadcastMapJobs(Request request) {
+        List<Response> responses = workerClient.broadcast(workerRegistry.getWorkers(), request);
+        for (Response response : responses) {
+            if (!response.isSuccess()) {
+                return new Response(false, "Worker map phase failed: " + response.getMessage());
+            }
+        }
+        return new Response(true, "Workers submitted map outputs to reducer");
     }
 
     private Response broadcastToWorkers(Request request) {
@@ -120,9 +151,4 @@ public class MasterDispatcher {
         return new Response(true, "Request applied to all workers");
     }
 
-    private void accumulate(Map<String, Double> mergedPartials, Map<String, Double> totals) {
-        for (Map.Entry<String, Double> entry : totals.entrySet()) {
-            mergedPartials.merge(entry.getKey(), entry.getValue(), Double::sum);
-        }
-    }
 }

@@ -16,7 +16,23 @@ public class ReducerClient {
         this.reducerPort = reducerPort;
     }
 
-    public Response reduce(Request request) {
+    public String getReducerHost() {
+        return reducerHost;
+    }
+
+    public int getReducerPort() {
+        return reducerPort;
+    }
+
+    public Response startReduce(Request request) {
+        return send(request);
+    }
+
+    public Response waitForResult(String requestId) {
+        return send(Request.reducedResult(requestId));
+    }
+
+    private Response send(Request request) {
         try (Socket socket = new Socket(reducerHost, reducerPort);
              ObjectOutputStream out = new ObjectOutputStream(socket.getOutputStream());
              ObjectInputStream in = new ObjectInputStream(socket.getInputStream())) {
