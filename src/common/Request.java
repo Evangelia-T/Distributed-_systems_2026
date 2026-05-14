@@ -75,6 +75,10 @@ public class Request implements Serializable {
         return new Request(RequestType.PLACE_BET, null, gameName, null, playerId, null, null, null, null, betAmount, null, null);
     }
 
+    public static Request randomNumber(String gameName) {
+        return new Request(RequestType.GET_RANDOM_NUMBER, null, gameName, null, null, null, null, null, null, null, null, null);
+    }
+
     public static Request addBalance(String playerId, double amount) {
         return new Request(RequestType.ADD_BALANCE, null, null, null, playerId, null, null, null, null, amount, null, null);
     }

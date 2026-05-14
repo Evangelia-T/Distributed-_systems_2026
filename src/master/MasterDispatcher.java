@@ -14,7 +14,6 @@ public class MasterDispatcher {
     private final HashRouter hashRouter;
     private final WorkerRegistry workerRegistry;
     private final WorkerClient workerClient;
-    private final ReducerClient reducerClient;
     private final CasinoState casinoState;
 
     public MasterDispatcher(HashRouter hashRouter,
@@ -24,7 +23,6 @@ public class MasterDispatcher {
         this.hashRouter = hashRouter;
         this.workerRegistry = workerRegistry;
         this.workerClient = workerClient;
-        this.reducerClient = reducerClient;
         this.casinoState = new CasinoState();
     }
 
@@ -56,7 +54,12 @@ public class MasterDispatcher {
         if (!masterResponse.isSuccess()) {
             return masterResponse;
         }
-        return routeByGameName(request.getGameInfo().getGameName(), request);
+
+        Response workerResponse = routeByGameName(request.getGameInfo().getGameName(), request);
+        if (!workerResponse.isSuccess()) {
+            casinoState.removeGame(request.getGameInfo().getGameName());
+        }
+        return workerResponse;
     }
 
     private Response removeGameFromMasterAndWorker(Request request) {
@@ -64,6 +67,7 @@ public class MasterDispatcher {
         if (!masterResponse.isSuccess()) {
             return masterResponse;
         }
+
         return routeByGameName(request.getGameName(), request);
     }
 
@@ -125,4 +129,5 @@ public class MasterDispatcher {
             mergedPartials.merge(entry.getKey(), entry.getValue(), Double::sum);
         }
     }
+
 }

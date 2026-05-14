@@ -131,8 +131,14 @@ public class HandleThreadWorker extends Thread {
         Game game = new Game(gameInfo);
         String result = storage.addGame(game);
 
-        if ("Game added successfully".equals(result)) {
-            return new Response(true, result);
+        if ("Game added successfully".equals(result) || "Game re-activated successfully".equals(result)) {
+            Response rngResponse = sendRequestToRandomGenerator(Request.addGame(gameInfo));
+            if (!rngResponse.isSuccess()) {
+                storage.removeGame(gameInfo.getGameName());
+                return rngResponse;
+            }
+
+            return new Response(true, result + " and RNG queue registered");
         }
 
         return new Response(false, result);
@@ -146,7 +152,12 @@ public class HandleThreadWorker extends Thread {
         String result = storage.removeGame(gameName);
 
         if ("Game removed successfully (set inactive)".equals(result)) {
-            return new Response(true, result);
+            Response rngResponse = sendRequestToRandomGenerator(Request.removeGame(gameName));
+            if (!rngResponse.isSuccess()) {
+                return rngResponse;
+            }
+
+            return new Response(true, result + " and RNG queue removed");
         }
 
         return new Response(false, result);
@@ -262,7 +273,13 @@ public class HandleThreadWorker extends Thread {
             return new Response(false, "Insufficient balance");
         }
 
-        double payout = calculatePayout(game, betAmount);
+        double payout;
+        try {
+            payout = calculatePayout(game, betAmount);
+        } catch (RuntimeException e) {
+            storage.addWinnings(playerId, betAmount);
+            return new Response(false, e.getMessage());
+        }
 
         synchronized (game) {
             game.addToTotalBetAmount(betAmount);
@@ -291,7 +308,7 @@ public class HandleThreadWorker extends Thread {
     }
 
     private double calculatePayout(Game game, double betAmount) {
-        int randomNumber = getVerifiedRandomNumber(game.getHashKey());
+        int randomNumber = getVerifiedRandomNumber(game);
         int mod100 = Math.floorMod(randomNumber, 100);
 
         if (mod100 == 0) {
@@ -301,14 +318,14 @@ public class HandleThreadWorker extends Thread {
         int mod10 = Math.floorMod(randomNumber, 10);
         double multiplier = switch (game.getRiskLevel().toLowerCase()) {
             case "high" -> new double[]{0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 1.0, 2.0, 6.5}[mod10];
-            case "medium" -> new double[]{0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.5, 1.0, 1.5, 2.5}[mod10];
+            case "medium" -> new double[]{0.0, 0.0, 0.0, 0.0, 0.0, 0.5, 1.0, 1.5, 2.5, 3.5}[mod10];
             default -> new double[]{0.0, 0.0, 0.0, 0.1, 0.5, 1.0, 1.1, 1.3, 2.0, 2.5}[mod10];
         };
 
         return betAmount * multiplier;
     }
 
-    private int getVerifiedRandomNumber(String secret) {
+    private int getVerifiedRandomNumber(Game game) {
         Socket socket = null;
         ObjectOutputStream out = null;
         ObjectInputStream in = null;
@@ -321,13 +338,16 @@ public class HandleThreadWorker extends Thread {
 
             in = new ObjectInputStream(socket.getInputStream());
 
-            // Στέλνουμε το shared secret στο RNG server
-            out.writeObject(secret);
+            out.writeObject(Request.randomNumber(game.getGameName()));
             out.flush();
 
             RandomResult result = (RandomResult) in.readObject();
 
-            String expectedHash = sha256(result.getRandomNumber() + secret);
+            if (result.getRandomNumber() < 0) {
+                throw new RuntimeException(result.getHash());
+            }
+
+            String expectedHash = sha256(result.getRandomNumber() + game.getHashKey());
 
             if (!expectedHash.equals(result.getHash())) {
                 throw new RuntimeException("Hash verification failed");
@@ -337,6 +357,54 @@ public class HandleThreadWorker extends Thread {
 
         } catch (Exception e) {
             throw new RuntimeException("Failed to get verified random number from RNG server", e);
+        } finally {
+            try {
+                if (in != null) in.close();
+            } catch (IOException e) {
+                e.printStackTrace();
+            }
+
+            try {
+                if (out != null) out.close();
+            } catch (IOException e) {
+                e.printStackTrace();
+            }
+
+            try {
+                if (socket != null && !socket.isClosed()) {
+                    socket.close();
+                }
+            } catch (IOException e) {
+                e.printStackTrace();
+            }
+        }
+    }
+
+    private Response sendRequestToRandomGenerator(Request request) {
+        Socket socket = null;
+        ObjectOutputStream out = null;
+        ObjectInputStream in = null;
+
+        try {
+            socket = new Socket(RNG_HOST, RNG_PORT);
+
+            out = new ObjectOutputStream(socket.getOutputStream());
+            out.flush();
+
+            in = new ObjectInputStream(socket.getInputStream());
+
+            out.writeObject(request);
+            out.flush();
+
+            RandomResult result = (RandomResult) in.readObject();
+            if (result.getRandomNumber() < 0) {
+                return new Response(false, "RNG failed: " + result.getHash());
+            }
+
+            return new Response(true, result.getHash());
+
+        } catch (Exception e) {
+            return new Response(false, "Failed to communicate with RNG server: " + e.getMessage());
         } finally {
             try {
                 if (in != null) in.close();
