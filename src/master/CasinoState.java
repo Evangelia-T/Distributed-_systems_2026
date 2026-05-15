@@ -45,6 +45,20 @@ public class CasinoState {
         return new Response(true, "Bet limits updated for " + gameName);
     }
 
+    public synchronized Response rateGame(String gameName, int rating) {
+        if (rating < 1 || rating > 5) {
+            return new Response(false, "Rating must be between 1 and 5");
+        }
+
+        GameInfo gameInfo = gamesByName.get(gameName);
+        if (gameInfo == null) return new Response(false, "Game not found: " + gameName);
+
+        GameInfo updated = gameInfo.withRating(rating);
+        gamesByName.put(gameName, updated);
+        return new Response(true, "Rating updated for " + gameName + ": " + updated.getStars()
+                + " stars from " + updated.getNoOfVotes() + " votes");
+    }
+
     public synchronized Response getAllAvailableGames() {
         return new Response(true, "All available games", new ArrayList<>(gamesByName.values()));
     }

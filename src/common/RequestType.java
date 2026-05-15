@@ -16,5 +16,6 @@ public enum RequestType {
     SEARCH_GAMES,
     PLACE_BET,
     GET_RANDOM_NUMBER,
-    ADD_BALANCE
+    ADD_BALANCE,
+    RATE_GAME
 }

@@ -131,4 +131,10 @@ public class Game implements Serializable {
         this.riskLevel = riskLevel;
         this.jackpot = calculateJackpot(riskLevel);
     }
+
+    public void addRating(int rating) {
+        int updatedVotes = noOfVotes + 1;
+        stars = Math.round((stars * noOfVotes + rating) / (float) updatedVotes);
+        noOfVotes = updatedVotes;
+    }
 }

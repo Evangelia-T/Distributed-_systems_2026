@@ -85,6 +85,12 @@ public class GameInfo implements Serializable {
         return new GameInfo(gameName, providerName, stars, noOfVotes, gameLogo, minBet, maxBet, updatedRiskLevel, hashKey);
     }
 
+    public GameInfo withRating(int rating) {
+        int updatedVotes = noOfVotes + 1;
+        int updatedStars = Math.round((stars * noOfVotes + rating) / (float) updatedVotes);
+        return new GameInfo(gameName, providerName, updatedStars, updatedVotes, gameLogo, minBet, maxBet, riskLevel, hashKey);
+    }
+
     private static String deriveBetCategory(double minBet) {
         if (minBet >= 5.0) {
             return "$$$";
