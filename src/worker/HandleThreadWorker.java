@@ -105,6 +105,9 @@ public class HandleThreadWorker extends Thread {
             case ADD_BALANCE:
                 return handleAddBalance(request.getPlayerId(), request.getBetAmount());
 
+            case RATE_GAME:
+                return handleRateGame(request.getGameName(), request.getMinStars());
+
             case GET_PROVIDER_STATS:
                 return handleGetProviderStats(request.getProviderName());
             case GET_PLAYER_STATS:
@@ -189,6 +192,16 @@ public class HandleThreadWorker extends Thread {
         String result = storage.updateBetLimits(gameName, minBet, maxBet);
 
         if ("Bet limits updated successfully".equals(result)) {
+            return new Response(true, result);
+        }
+
+        return new Response(false, result);
+    }
+
+    private Response handleRateGame(String gameName, Integer rating) {
+        String result = storage.rateGame(gameName, rating);
+
+        if ("Rating updated successfully".equals(result)) {
             return new Response(true, result);
         }
 

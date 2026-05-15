@@ -123,6 +123,29 @@ public class WorkerStorage implements Mapper<String, String, String, Double> {
         return "Bet limits updated successfully";
     }
 
+    public synchronized String rateGame(String gameName, Integer rating) {
+        if (gameName == null || gameName.trim().isEmpty()) {
+            return "Game name is empty";
+        }
+
+        if (rating == null) {
+            return "Rating is null";
+        }
+
+        if (rating < 1 || rating > 5) {
+            return "Rating must be between 1 and 5";
+        }
+
+        Game game = games.get(gameName);
+
+        if (game == null) {
+            return "Game not found";
+        }
+
+        game.addRating(rating);
+        return "Rating updated successfully";
+    }
+
     public synchronized Game getGame(String gameName) {
         return games.get(gameName);
     }

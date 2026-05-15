@@ -100,6 +100,10 @@ public class Request implements Serializable {
         return new Request(RequestType.ADD_BALANCE, null, null, null, playerId, null, null, null, null, amount, null, null);
     }
 
+    public static Request rateGame(String playerId, String gameName, int stars) {
+        return new Request(RequestType.RATE_GAME, null, gameName, null, playerId, null, null, null, null, null, stars, null);
+    }
+
     public static Request startProviderReduce(String providerName, String requestId, int expectedResults) {
         return new Request(RequestType.START_PROVIDER_REDUCE, null, null, providerName, null, null, null,
                 null, null, null, null, null, requestId, expectedResults, null, null);

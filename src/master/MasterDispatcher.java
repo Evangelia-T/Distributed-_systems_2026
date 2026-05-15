@@ -42,6 +42,7 @@ public class MasterDispatcher {
                     casinoState.search(request.getProviderName(), request.getRiskLevel(), request.getBetCategory(), request.getMinStars());
             case PLACE_BET -> routeByGameName(request.getGameName(), request);
             case ADD_BALANCE -> broadcastToWorkers(request);
+            case RATE_GAME -> rateGameOnMasterAndWorker(request);
             default -> new Response(false, "Unsupported request type for master: " + request.getType());
         };
     }
@@ -82,6 +83,24 @@ public class MasterDispatcher {
             return masterResponse;
         }
         return routeByGameName(request.getGameName(), request);
+    }
+
+    private Response rateGameOnMasterAndWorker(Request request) {
+        if (request.getMinStars() == null) {
+            return new Response(false, "Rating is missing");
+        }
+
+        Response masterResponse = casinoState.rateGame(request.getGameName(), request.getMinStars());
+        if (!masterResponse.isSuccess()) {
+            return masterResponse;
+        }
+
+        Response workerResponse = routeByGameName(request.getGameName(), request);
+        if (!workerResponse.isSuccess()) {
+            return workerResponse;
+        }
+
+        return masterResponse;
     }
 
     private Response routeByGameName(String gameName, Request request) {

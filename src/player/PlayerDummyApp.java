@@ -25,6 +25,7 @@ public class PlayerDummyApp {
                     case "3" -> addBalance(host, port, scanner);
                     case "4" -> play(host, port, scanner);
                     case "5" -> playerStats(host, port, scanner);
+                    case "6" -> rateGame(host, port, scanner);
                     case "0" -> running = false;
                     default -> System.out.println("Unknown option");
                 }
@@ -44,8 +45,8 @@ public class PlayerDummyApp {
         }
 
         for (GameInfo game : response.getGames()) {
-            System.out.printf("- %s | provider=%s | stars=%d | risk=%s | bet=%s | range=[%.2f..%.2f]%n",
-                    game.getGameName(), game.getProviderName(), game.getStars(), game.getRiskLevel(), game.getBetCategory(), game.getMinBet(), game.getMaxBet());
+            System.out.printf("- %s | provider=%s | stars=%d (%d votes) | risk=%s | bet=%s | range=[%.2f..%.2f]%n",
+                    game.getGameName(), game.getProviderName(), game.getStars(), game.getNoOfVotes(), game.getRiskLevel(), game.getBetCategory(), game.getMinBet(), game.getMaxBet());
         }
     }
 
@@ -66,8 +67,8 @@ public class PlayerDummyApp {
 
         System.out.println((response.isSuccess() ? "OK" : "ERROR") + ": " + response.getMessage());
         for (GameInfo game : response.getGames()) {
-            System.out.printf("- %s | provider=%s | stars=%d | risk=%s | bet=%s | range=[%.2f..%.2f]%n",
-                    game.getGameName(), game.getProviderName(), game.getStars(), game.getRiskLevel(), game.getBetCategory(), game.getMinBet(), game.getMaxBet());
+            System.out.printf("- %s | provider=%s | stars=%d (%d votes) | risk=%s | bet=%s | range=[%.2f..%.2f]%n",
+                    game.getGameName(), game.getProviderName(), game.getStars(), game.getNoOfVotes(), game.getRiskLevel(), game.getBetCategory(), game.getMinBet(), game.getMaxBet());
         }
     }
 
@@ -100,6 +101,18 @@ public class PlayerDummyApp {
         response.getTotals().forEach((k, v) -> System.out.printf("  %s -> %.2f FUN%n", k, v));
     }
 
+    private static void rateGame(String host, int port, Scanner scanner) throws Exception {
+        System.out.print("Player ID: ");
+        String playerId = scanner.nextLine().trim();
+        System.out.print("Game name: ");
+        String gameName = scanner.nextLine().trim();
+        System.out.print("Stars 1-5: ");
+        int stars = Integer.parseInt(scanner.nextLine().trim());
+
+        Response response = send(host, port, Request.rateGame(playerId, gameName, stars));
+        System.out.println((response.isSuccess() ? "OK" : "ERROR") + ": " + response.getMessage());
+    }
+
     private static Response send(String host, int port, Request request) throws Exception {
         try (Socket socket = new Socket(host, port);
              ObjectOutputStream out = new ObjectOutputStream(socket.getOutputStream());
@@ -122,6 +135,7 @@ public class PlayerDummyApp {
         System.out.println("3. addBalance()");
         System.out.println("4. play()");
         System.out.println("5. View my stats");
+        System.out.println("6. Rate game");
         System.out.println("0. Exit");
         System.out.print("Choose option: ");
     }
