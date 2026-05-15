@@ -39,21 +39,21 @@ public class ReducerRequestHandler implements Runnable {
 
         return switch (request.getType()) {
             case START_PROVIDER_REDUCE -> startReduceJob(
-                    request.getRequestId(), request.getExpectedResults(), request.getProviderName());
+                    request.getRequestId(), request.getExpectedResults(), request.getProviderName(), true);
             case START_PLAYER_REDUCE -> startReduceJob(
-                    request.getRequestId(), request.getExpectedResults(), request.getPlayerId());
+                    request.getRequestId(), request.getExpectedResults(), request.getPlayerId(), false);
             case MAP_PROVIDER_STATS, MAP_PLAYER_STATS -> acceptMapOutput(request);
             case GET_REDUCED_RESULT -> waitForReducedResult(request.getRequestId());
             default -> new Response(false, "Unsupported reducer request type: " + request.getType());
         };
     }
 
-    private Response startReduceJob(String requestId, Integer expectedResults, String subject) {
+    private Response startReduceJob(String requestId, Integer expectedResults, String subject, boolean includeGrandTotal) {
         if (expectedResults == null) {
             return new Response(false, "Missing expected result count");
         }
 
-        String result = accumulator.startJob(requestId, expectedResults, subject);
+        String result = accumulator.startJob(requestId, expectedResults, subject, includeGrandTotal);
         if ("Reduce job started".equals(result)) {
             return new Response(true, result);
         }
